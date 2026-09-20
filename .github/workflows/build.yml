@@ -21,11 +21,7 @@ jobs:
       - name: Install system dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            git zip unzip openjdk-17-jdk \
-            autoconf automake libtool libtool-bin pkg-config m4 \
-            zlib1g-dev libncurses-dev libtinfo5 cmake \
-            libffi-dev libssl-dev build-essential ccache
+          sudo apt-get install -y git zip unzip openjdk-17-jdk autoconf automake libtool libtool-bin pkg-config m4 zlib1g-dev libncurses-dev libtinfo5 cmake libffi-dev libssl-dev build-essential ccache
 
       - name: Install Buildozer
         run: |
@@ -40,14 +36,6 @@ jobs:
       - name: Show errors
         if: always()
         run: tail -300 build.log || true
-
-      - name: Upload build log
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: build-log
-          path: build.log
-          if-no-files-found: ignore
 
       - name: Upload APK
         if: success()
