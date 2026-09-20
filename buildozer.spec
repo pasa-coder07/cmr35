@@ -9,7 +9,7 @@ source.include_patterns = assets/*,libs/arm64-v8a/*
 source.exclude_dirs = bin,.buildozer,__pycache__
 
 version = 1.0
-requirements = python3,kivy,pyjnius,android,libffi
+requirements = python3,kivy,pyjnius,android
 
 orientation = portrait
 fullscreen = 0
@@ -22,7 +22,7 @@ android.build_tools_version = 33.0.2
 android.ndk = 25c
 android.accept_sdk_license = True
 
-android.add_libs_arm64_v8a = libs/arm64-v8a/*.so
+android.add_libs_arm64_v8a = libs/arm64-v8a/*
 android.add_assets = assets/MOV00028.AVI:assets/MOV00028.AVI
 
 [buildozer]
