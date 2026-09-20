@@ -20,7 +20,6 @@ jobs:
           wget -q https://raw.githubusercontent.com/hzw1199/Android-FFmpeg-Prebuilt/main/ffmpeg-9.0/bin/ffprobe -O assets/bin/ffprobe
           chmod +x assets/bin/ffmpeg assets/bin/ffprobe
           ls -lh assets/bin/
-          file assets/bin/ffmpeg
 
       - name: Set up Python
         uses: actions/setup-python@v5

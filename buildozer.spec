@@ -13,7 +13,7 @@ requirements = python3,kivy,pyjnius,android
 orientation = portrait
 fullscreen = 0
 
-android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,READ_MEDIA_VIDEO
+android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,READ_MEDIA_VIDEO,MANAGE_EXTERNAL_STORAGE
 android.archs = arm64-v8a
 android.minapi = 24
 android.api = 30
@@ -22,8 +22,6 @@ android.accept_sdk_license = True
 android.build_tools_version = 33.0.2
 
 android.add_assets = assets/MOV00028.AVI:assets/MOV00028.AVI
-android.add_assets_2 = assets/bin/ffmpeg:assets/bin/ffmpeg
-android.add_assets_3 = assets/bin/ffprobe:assets/bin/ffprobe
 
 p4a.branch = v2024.01.21
 
