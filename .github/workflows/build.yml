@@ -9,7 +9,7 @@ jobs:
   build:
     runs-on: ubuntu-22.04
     container:
-      image: kivy/buildozer:latest
+      image: kivy/buildozer:2024.01.21
     timeout-minutes: 120
 
     steps:
