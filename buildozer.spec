@@ -1,4 +1,5 @@
 [app]
+p4a.branch = develop
 title = CMR35
 package.name = cmr35
 package.domain = com.cmr35
@@ -8,7 +9,7 @@ source.include_patterns = assets/*,libs/arm64-v8a/*
 source.exclude_dirs = bin,.buildozer,__pycache__
 
 version = 1.0
-requirements = hostpython3==3.11.5,python3==3.11.5,kivy,pyjnius,android
+requirements = python3,kivy,pyjnius,android,libffi
 
 orientation = portrait
 fullscreen = 0
@@ -18,7 +19,7 @@ android.archs = arm64-v8a
 android.minapi = 24
 android.api = 33
 android.build_tools_version = 33.0.2
-android.ndk = 25b
+android.ndk = 25c
 android.accept_sdk_license = True
 
 android.add_libs_arm64_v8a = libs/arm64-v8a/*.so
