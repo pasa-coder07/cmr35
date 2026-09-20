@@ -1,5 +1,6 @@
 [app]
 p4a.branch = master
+p4a.local_recipes = local_recipes
 title = CMR35
 package.name = cmr35
 package.domain = com.cmr35
