@@ -8,6 +8,7 @@ source.include_patterns = assets/*,libs/arm64-v8a/*
 source.exclude_dirs = bin,.buildozer,__pycache__
 
 version = 1.0
+p4a.branch = v2024.01.21
 requirements = python3,kivy,pyjnius,android
 
 orientation = portrait
