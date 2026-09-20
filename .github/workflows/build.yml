@@ -27,10 +27,12 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install buildozer cython
 
-      - name: Build APK
-        run: |
-          set -o pipefail
-          yes | buildozer -v android debug 2>&1 | tee build.log
+- name: Build APK
+  run: |
+    export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"
+    which buildozer || python3 -m buildozer --version
+    set -o pipefail
+    yes | python3 -m buildozer -v android debug 2>&1 | tee build.log
 
       - name: Show errors
         if: always()
