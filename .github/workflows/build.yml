@@ -10,6 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     container:
       image: ubuntu:20.04
+      options: --user root
     timeout-minutes: 180
 
     steps:
@@ -27,12 +28,11 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install buildozer cython
 
-- name: Build APK
-  run: |
-    export PATH="/usr/local/bin:$HOME/.local/bin:$PATH"
-    which buildozer || python3 -m buildozer --version
-    set -o pipefail
-    yes | python3 -m buildozer -v android debug 2>&1 | tee build.log
+      - name: Build APK
+        run: |
+          export PATH="/root/.local/bin:/home/runner/.local/bin:$PATH"
+          set -o pipefail
+          yes | python3 -m buildozer -v android debug 2>&1 | tee build.log
 
       - name: Show errors
         if: always()
