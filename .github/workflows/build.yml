@@ -31,11 +31,15 @@ jobs:
       - name: Build APK
         run: |
           set -o pipefail
-          yes | buildozer -v android debug 2>&1 | tee build.log
+          buildozer -v android debug 2>&1 | tee build.log
 
-      - name: Show errors
+      - name: Show gradle errors
         if: always()
-        run: tail -300 build.log || true
+        run: |
+          echo "===== GRADLE ERRORS ====="
+          grep -n -B2 -A15 "gradlew failed\|FAILURE:\|> Task.*FAILED\|error:" build.log | tail -80 || true
+          echo "===== LAST 100 LINES ====="
+          tail -100 build.log || true
 
       - name: Upload APK
         if: success()
