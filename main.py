@@ -103,7 +103,30 @@ class Root(BoxLayout):
 
     def _set_status(self, msg):
         Clock.schedule_once(lambda *_: setattr(self, 'status', msg))
-
+def _ensure_ffmpeg(self):
+    import stat
+    from kivy import platform
+    if platform != 'android':
+        return
+    from android.storage import app_storage_path
+    from jnius import autoclass
+    PythonActivity = autoclass('org.kivy.android.PythonActivity')
+    act = PythonActivity.mActivity
+    bindir = os.path.join(act.getFilesDir().getAbsolutePath(), 'bin')
+    os.makedirs(bindir, exist_ok=True)
+    for name in ['ffmpeg', 'ffprobe']:
+        target = os.path.join(bindir, name)
+        if not os.path.exists(target):
+            src = os.path.join('assets', 'bin', name)  # APK assets içinden
+            try:
+                # asset'i oku ve yaz
+                import shutil as _sh
+                with act.getAssets().open('bin/' + name) as f:
+                    with open(target, 'wb') as out:
+                        _sh.copyfileobj(f, out)
+                os.chmod(target, 0o755)
+            except Exception as e:
+                print('ffmpeg extract hatasi:', e)
     def _template_path(self):
         base = self._app_dir()
         for d in [base, os.path.dirname(os.path.abspath(__file__))]:
@@ -134,6 +157,7 @@ class Root(BoxLayout):
             pass
 
     def _work(self):
+self._ensure_ffmpeg()
         try:
             ff, fp, libdir = core.find_ffmpeg()
             if not ff or not fp:
