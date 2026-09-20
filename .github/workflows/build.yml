@@ -16,17 +16,11 @@ jobs:
       - name: Download static ffmpeg for android arm64
         run: |
           mkdir -p assets/bin
-          wget -q https://github.com/tanersener/ffmpeg-kit/releases/download/v6.0-2/ffmpeg-kit-static-gpl-6.0-2-android-arm64-v8a.zip -O /tmp/ff.zip || \
-          wget -q https://github.com/arthenica/ffmpeg-kit/releases/download/v6.0-2/ffmpeg-kit-static-gpl-6.0-2-android-arm64-v8a.zip -O /tmp/ff.zip || \
-          echo "İndirme başarısız"
-          ls -lh /tmp/ff.zip || true
-          unzip -o /tmp/ff.zip -d /tmp/ff || true
-          find /tmp/ff -name "ffmpeg" -o -name "ffprobe" 2>/dev/null
-          # Bulduysa assets'e koy
-          find /tmp/ff -name "ffmpeg" -type f -exec cp {} assets/bin/ffmpeg \; 2>/dev/null || true
-          find /tmp/ff -name "ffprobe" -type f -exec cp {} assets/bin/ffprobe \; 2>/dev/null || true
-          chmod +x assets/bin/ffmpeg assets/bin/ffprobe 2>/dev/null || true
-          ls -lh assets/bin/ || true
+          wget -q https://raw.githubusercontent.com/hzw1199/Android-FFmpeg-Prebuilt/main/ffmpeg-9.0/bin/ffmpeg -O assets/bin/ffmpeg
+          wget -q https://raw.githubusercontent.com/hzw1199/Android-FFmpeg-Prebuilt/main/ffmpeg-9.0/bin/ffprobe -O assets/bin/ffprobe
+          chmod +x assets/bin/ffmpeg assets/bin/ffprobe
+          ls -lh assets/bin/
+          file assets/bin/ffmpeg
 
       - name: Set up Python
         uses: actions/setup-python@v5
