@@ -14,6 +14,7 @@ import cmr35_core as core
 
 
 def extract_ffmpeg():
+    return  # ARTIK GEREKSIZ - statik ffmpeg native lib
     """APK assets'ten ffmpeg/ffprobe cikar, calistirilabilir yap."""
     if platform != 'android':
         return

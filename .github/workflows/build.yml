@@ -13,13 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download static ffmpeg for android arm64
+      - name: Replace launchers with static ffmpeg
         run: |
-          mkdir -p assets/bin
-          wget -q https://raw.githubusercontent.com/hzw1199/Android-FFmpeg-Prebuilt/main/ffmpeg-9.0/bin/ffmpeg -O assets/bin/ffmpeg
-          wget -q https://raw.githubusercontent.com/hzw1199/Android-FFmpeg-Prebuilt/main/ffmpeg-9.0/bin/ffprobe -O assets/bin/ffprobe
-          chmod +x assets/bin/ffmpeg assets/bin/ffprobe
-          ls -lh assets/bin/
+          rm -f libs/arm64-v8a/libffmpeg.so libs/arm64-v8a/libffprobe.so
+          wget -q https://raw.githubusercontent.com/hzw1199/Android-FFmpeg-Prebuilt/main/ffmpeg-9.0/bin/ffmpeg -O libs/arm64-v8a/libffmpeg.so
+          wget -q https://raw.githubusercontent.com/hzw1199/Android-FFmpeg-Prebuilt/main/ffmpeg-9.0/bin/ffprobe -O libs/arm64-v8a/libffprobe.so
+          chmod +x libs/arm64-v8a/libffmpeg.so libs/arm64-v8a/libffprobe.so
+          ls -lh libs/arm64-v8a/
+          file libs/arm64-v8a/libffmpeg.so
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -45,7 +46,7 @@ jobs:
 
       - name: Show errors
         if: always()
-        run: grep -n -B2 -A15 "gradlew failed\|FAILURE:\|error:" build.log | tail -80 || true
+        run: grep -n -B2 -A15 "gradlew failed\|FAILURE:\|error:" build.log | tail -60 || true
 
       - name: Upload APK
         if: success()

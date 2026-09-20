@@ -24,25 +24,14 @@ def _native_dir():
         return None
 
 def find_ffmpeg():
-    # 1) APK icinden cikarilmis static ffmpeg
-    try:
-        from jnius import autoclass
-        act = autoclass('org.kivy.android.PythonActivity').mActivity
-        bindir = os.path.join(act.getFilesDir().getAbsolutePath(), 'bin')
-        ff = os.path.join(bindir, 'ffmpeg')
-        fp = os.path.join(bindir, 'ffprobe')
-        if os.path.exists(ff) and os.path.exists(fp):
-            return ff, fp, bindir
-    except Exception:
-        pass
-    # 2) Native lib fallback
+    # Native library fallback (statik ffmpeg, lib*.so ismiyle paketlendi)
     nd = _native_dir()
     if nd and os.path.isdir(nd):
         ff = os.path.join(nd, 'libffmpeg.so')
         fp = os.path.join(nd, 'libffprobe.so')
         if os.path.exists(ff) and os.path.exists(fp):
             return ff, fp, nd
-    # 3) Sistem
+    # Sistem
     import shutil
     return shutil.which('ffmpeg'), shutil.which('ffprobe'), None
 

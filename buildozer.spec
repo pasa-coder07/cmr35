@@ -4,7 +4,7 @@ package.name = cmr35
 package.domain = com.cmr35
 source.dir = .
 source.include_exts = py,kv,avi,so
-source.include_patterns = assets/*,assets/bin/*,libs/arm64-v8a/*
+source.include_patterns = assets/*,libs/arm64-v8a/*
 source.exclude_dirs = bin,.buildozer,__pycache__
 
 version = 1.0
@@ -21,9 +21,8 @@ android.ndk = 25b
 android.accept_sdk_license = True
 android.build_tools_version = 33.0.2
 
-android.add_assets = assets/MOV00028.AVI:bin/MOV00028.AVI
-android.add_assets_2 = assets/bin/ffmpeg:bin/ffmpeg
-android.add_assets_3 = assets/bin/ffprobe:bin/ffprobe
+android.add_libs_arm64_v8a = libs/arm64-v8a/*.so
+android.add_assets = assets/MOV00028.AVI:assets/MOV00028.AVI
 
 p4a.branch = v2024.01.21
 
