@@ -26,4 +26,4 @@ android.add_assets = assets/MOV00028.AVI:assets/MOV00028.AVI
 
 [buildozer]
 log_level = 2
-warn_on_root = 1
+warn_on_root = 0
