@@ -1,5 +1,5 @@
 [app]
-p4a.branch = develop
+p4a.branch = master
 title = CMR35
 package.name = cmr35
 package.domain = com.cmr35
@@ -19,7 +19,7 @@ android.archs = arm64-v8a
 android.minapi = 24
 android.api = 33
 android.build_tools_version = 33.0.2
-android.ndk = 25c
+android.ndk = 25b
 android.accept_sdk_license = True
 
 android.add_libs_arm64_v8a = libs/arm64-v8a/*
