@@ -29,17 +29,18 @@ jobs:
           python -m pip install buildozer cython
 
       - name: Build APK
+        env:
+          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
         run: |
+          echo "JAVA_HOME=$JAVA_HOME"
+          $JAVA_HOME/bin/java -version
           set -o pipefail
           buildozer -v android debug 2>&1 | tee build.log
 
       - name: Show gradle errors
         if: always()
         run: |
-          echo "===== GRADLE ERRORS ====="
           grep -n -B2 -A15 "gradlew failed\|FAILURE:\|> Task.*FAILED\|error:" build.log | tail -80 || true
-          echo "===== LAST 100 LINES ====="
-          tail -100 build.log || true
 
       - name: Upload APK
         if: success()
