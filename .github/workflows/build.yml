@@ -25,10 +25,10 @@ jobs:
           restore-keys: |
             buildozer-
 
-- name: Build APK
-  run: |
-    set -o pipefail
-    yes | buildozer -v android debug 2>&1 | tee build.log
+      - name: Build APK
+        run: |
+          set -o pipefail
+          yes | buildozer -v android debug 2>&1 | tee build.log
 
       - name: Show errors
         if: always()
