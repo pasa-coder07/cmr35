@@ -7,32 +7,35 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
-    container:
-      image: ubuntu:20.04
-      options: --user root
+    runs-on: ubuntu-22.04
     timeout-minutes: 180
 
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install system dependencies
         run: |
-          export DEBIAN_FRONTEND=noninteractive
-          apt-get update
-          apt-get install -y python3 python3-pip git zip unzip openjdk-8-jdk autoconf libtool pkg-config zlib1g-dev libncurses-dev cmake libffi-dev libssl-dev build-essential ccache
-          ln -sf /usr/bin/python3 /usr/bin/python
+          sudo apt-get update
+          sudo apt-get install -y \
+            git zip unzip openjdk-17-jdk \
+            autoconf automake libtool libtool-bin pkg-config m4 \
+            zlib1g-dev libncurses-dev libtinfo5 cmake \
+            libffi-dev libssl-dev build-essential ccache
 
       - name: Install Buildozer
         run: |
-          python3 -m pip install --upgrade pip
-          python3 -m pip install buildozer cython
+          python -m pip install --upgrade pip
+          python -m pip install buildozer cython
 
       - name: Build APK
         run: |
-          export PATH="/root/.local/bin:/home/runner/.local/bin:$PATH"
           set -o pipefail
-          yes | python3 -m buildozer -v android debug 2>&1 | tee build.log
+          yes | buildozer -v android debug 2>&1 | tee build.log
 
       - name: Show errors
         if: always()
