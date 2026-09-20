@@ -42,8 +42,24 @@ jobs:
           restore-keys: |
             buildozer-${{ runner.os }}-
 
-      - name: Build APK
-        run: buildozer -v android debug
+- name: Build APK
+  run: buildozer -v android debug 2>&1 | tee build.log
+  continue-on-error: true
+
+- name: Show error
+  if: failure() || always()
+  run: |
+    echo "===== LAST 200 LINES ====="
+    tail -200 build.log || true
+    echo "===== ERRORS ====="
+    grep -n -i -E "##\[error\]|error:|failed|traceback|no such|autoreconf" build.log | tail -50 || true
+
+- name: Upload build log
+  if: always()
+  uses: actions/upload-artifact@v4
+  with:
+    name: build-log
+    path: build.log
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
