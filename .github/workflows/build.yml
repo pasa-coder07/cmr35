@@ -7,7 +7,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     timeout-minutes: 120
 
     steps:
@@ -39,7 +39,9 @@ jobs:
             buildozer-${{ runner.os }}-
 
       - name: Build APK
-        run: buildozer -v android debug 2>&1 | tee build.log
+        run: |
+          set -o pipefail
+          buildozer -v android debug 2>&1 | tee build.log
 
       - name: Show errors
         if: always()
