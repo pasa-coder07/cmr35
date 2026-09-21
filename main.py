@@ -13,6 +13,50 @@ from kivy.utils import platform
 import cmr35_core as core
 
 
+
+
+def import_shared_video():
+    """Paylasimla gelen videoyu al, /sdcard/Download'a kopyala."""
+    if platform != 'android':
+        return None
+    try:
+        from jnius import autoclass, cast
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        Intent = autoclass('android.content.Intent')
+        Uri = autoclass('android.net.Uri')
+        File = autoclass('java.io.File')
+        FileOutputStream = autoclass('java.io.FileOutputStream')
+        InputStream = autoclass('java.io.InputStream')
+        act = PythonActivity.mActivity
+        intent = act.getIntent()
+        if intent is None:
+            return None
+        action = intent.getAction()
+        if action != Intent.ACTION_SEND:
+            return None
+        uri = intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        if uri is None:
+            return None
+        resolver = act.getContentResolver()
+        stream = resolver.openInputStream(uri)
+        # /sdcard/Download/ klasorune kopyala
+        dst_dir = '/sdcard/Download'
+        import time as _t
+        dst = os.path.join(dst_dir, 'shared_%d.mp4' % int(_t.time()))
+        buf = bytearray(65536)
+        with open(dst, 'wb') as out:
+            while True:
+                n = stream.read(buf)
+                if n <= 0:
+                    break
+                out.write(bytes(buf[:n]))
+        stream.close()
+        print('shared video alindi:', dst)
+        return dst
+    except Exception as e:
+        print('shared video hata:', e)
+        return None
+
 def extract_ffmpeg():
     return  # ARTIK GEREKSIZ - statik ffmpeg native lib
     """APK assets'ten ffmpeg/ffprobe cikar, calistirilabilir yap."""
@@ -158,6 +202,17 @@ class Root(BoxLayout):
         box.add_widget(btn)
         pop.open()
 
+    def on_start(self):
+        """Uygulama acildiginda paylasimla gelen video var mi kontrol et."""
+        try:
+            path = import_shared_video()
+            if path and os.path.isfile(path):
+                self.src = path
+                self.info = path
+                self.status = 'Paylasilan video hazir'
+        except Exception as e:
+            print('on_start hata:', e)
+
     def start(self):
         if not self.src:
             return
@@ -237,7 +292,11 @@ class Root(BoxLayout):
 class CMR35App(App):
     def build(self):
         Builder.load_string(KV)
-        return Root()
+        self.root_widget = Root()
+        return self.root_widget
+
+    def on_start(self):
+        Clock.schedule_once(lambda dt: self.root_widget.on_start(), 0.5)
 
 
 if __name__ == '__main__':

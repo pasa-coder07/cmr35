@@ -3,7 +3,7 @@ title = CMR35
 package.name = cmr35
 package.domain = com.cmr35
 source.dir = .
-source.include_exts = py,kv,avi,so
+source.include_exts = py,kv,avi,so,xml
 source.include_patterns = assets/*,libs/arm64-v8a/*
 source.exclude_dirs = bin,.buildozer,__pycache__
 
@@ -17,6 +17,7 @@ android.permissions = READ_EXTERNAL_STORAGE,WRITE_EXTERNAL_STORAGE,READ_MEDIA_VI
 android.archs = arm64-v8a
 android.minapi = 24
 android.api = 30
+android.manifest.intent_filters = intent_filters.xml
 android.ndk = 25b
 android.accept_sdk_license = True
 android.build_tools_version = 33.0.2
