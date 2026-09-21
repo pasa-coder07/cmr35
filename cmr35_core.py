@@ -7,8 +7,8 @@ AUDIO_ID = b'01wb'
 AUDIO_CHUNK_SIZE = 8184
 VIDEO_SEGMENT_FRAMES = 60
 ALIGN = 512
-TARGET_W = 1280
-TARGET_H = 720
+TARGET_W = 1920
+TARGET_H = 1080
 TARGET_FPS = 30
 AUDIO_RATE = 16000
 
@@ -91,7 +91,7 @@ def run_ffmpeg(ffmpeg, args, total_sec, env=None, on_progress=None):
 def normalize_input(ffmpeg, ffprobe, src, out, total_sec, env=None, on_progress=None):
     _, has_audio = probe_streams(ffprobe, src, env)
     vol = os.environ.get('CMR35_VOL', '3.0')
-    q = os.environ.get('CMR35_Q', '23')
+    q = os.environ.get('CMR35_Q', '25')
     dsp = 'highpass=f=120,lowpass=f=7500,volume=%s,alimiter=limit=0.95' % vol
     vf = ('scale=%d:%d:force_original_aspect_ratio=decrease,'
           'pad=%d:%d:(ow-iw)/2:(oh-ih)/2' % (TARGET_W, TARGET_H, TARGET_W, TARGET_H))
