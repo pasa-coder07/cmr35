@@ -22,7 +22,7 @@ android.accept_sdk_license = True
 android.build_tools_version = 33.0.2
 
 android.add_libs_arm64_v8a = libs/arm64-v8a/*.so
-android.add_assets = assets/MOV00028.AVI:assets/MOV00028.AVI
+android.add_assets = assets/MOV00028.AVI:bin/MOV00028.AVI
 
 p4a.branch = v2024.01.21
 

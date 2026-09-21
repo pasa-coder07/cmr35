@@ -117,7 +117,7 @@ class Root(BoxLayout):
         Clock.schedule_once(lambda *_: setattr(self, 'status', msg))
 
     def _template_path(self):
-        # APK assets icinden cikarilanlara bak
+        # 1) extract edilmis (APK assets'ten)
         try:
             from jnius import autoclass
             act = autoclass('org.kivy.android.PythonActivity').mActivity
@@ -127,12 +127,7 @@ class Root(BoxLayout):
                 return p
         except Exception:
             pass
-        # Yerel fallback
-        base = self._app_dir()
-        for d in [base, os.path.dirname(os.path.abspath(__file__))]:
-            p = os.path.join(d, 'MOV00028.AVI')
-            if os.path.isfile(p):
-                return p
+        # 2) /sdcard fallback
         for d in ['/sdcard/Download', '/sdcard',
                   '/storage/emulated/0/Download']:
             p = os.path.join(d, 'MOV00028.AVI')
