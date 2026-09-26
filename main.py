@@ -119,36 +119,69 @@ def extract_ffmpeg():
 
 
 def import_shared_video():
-    """Paylasimla gelen videoyu al."""
+    """Paylasimla gelen videoyu al. Birden fazla API dener."""
     if platform != 'android':
         return None
     try:
         from jnius import autoclass
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
         Intent = autoclass('android.content.Intent')
+        Build = autoclass('android.os.Build$VERSION')
         act = PythonActivity.mActivity
         intent = act.getIntent()
-        if intent is None or intent.getAction() != Intent.ACTION_SEND:
+        if intent is None:
+            print('SHARE: intent yok')
             return None
-        uri = intent.getParcelableExtra(Intent.EXTRA_STREAM)
+        action = intent.getAction()
+        print('SHARE: action=', action)
+        if action != Intent.ACTION_SEND:
+            return None
+
+        uri = None
+        # Android 13+ icin yeni API
+        try:
+            Parcelable = autoclass('android.os.Parcelable')
+            uri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Parcelable)
+        except Exception as e:
+            print('SHARE: yeni API hata:', e)
+        # Eski API fallback
         if uri is None:
+            try:
+                uri = intent.getParcelableExtra(Intent.EXTRA_STREAM)
+            except Exception as e:
+                print('SHARE: eski API hata:', e)
+        if uri is None:
+            print('SHARE: uri yok')
             return None
+        print('SHARE: uri=', str(uri))
+
+        # App-ozel klasore kopyala (izin gerekmez)
+        bindir = os.path.join(act.getFilesDir().getAbsolutePath(), 'shared')
+        os.makedirs(bindir, exist_ok=True)
+        import time as _t
+        dst = os.path.join(bindir, 'shared_%d.mp4' % int(_t.time()))
+
         resolver = act.getContentResolver()
         stream = resolver.openInputStream(uri)
-        import time as _t
-        dst = '/sdcard/Download/shared_%d.mp4' % int(_t.time())
+        if stream is None:
+            print('SHARE: stream yok')
+            return None
         buf = bytearray(65536)
+        total = 0
         with open(dst, 'wb') as out:
             while True:
                 n = stream.read(buf)
                 if n <= 0:
                     break
                 out.write(bytes(buf[:n]))
+                total += n
         stream.close()
+        print('SHARE: kopyalandi', dst, total)
         return dst
     except Exception as e:
-        print('shared hata:', e)
+        print('SHARE hata:', e)
         return None
+
 
 
 # ============================================================
@@ -340,6 +373,30 @@ class Root(BoxLayout):
             if os.path.isfile(p):
                 return p
         return None
+
+    def on_resume(self):
+        # Uygulama one geldiginde paylasim geldi mi kontrol et
+        try:
+            from jnius import autoclass
+            PythonActivity = autoclass('org.kivy.android.PythonActivity')
+            Intent = autoclass('android.content.Intent')
+            act = PythonActivity.mActivity
+            intent = act.getIntent()
+            if intent and intent.getAction() == Intent.ACTION_SEND:
+                p = import_shared_video()
+                if p and os.path.isfile(p):
+                    self.src = p
+                    size = human_size(os.path.getsize(p))
+                    self.status = 'Paylasilan video hazir'
+                    self.info = '%s\n%s' % (os.path.basename(p), size)
+                    # Intent'i temizle ki tekrar tetiklenmesin
+                    try:
+                        intent.setAction('')
+                        act.setIntent(intent)
+                    except Exception:
+                        pass
+        except Exception as e:
+            print('on_resume hata:', e)
 
     def pick(self):
         box = BoxLayout(orientation='vertical')
