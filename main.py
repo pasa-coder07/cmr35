@@ -1,9 +1,9 @@
 # -*- coding: utf-8 -*-
-import os, threading, shutil
+import os, threading, shutil, time
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
-from kivy.properties import StringProperty, NumericProperty, BooleanProperty
+from kivy.properties import StringProperty, NumericProperty, BooleanProperty, ListProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.filechooser import FileChooserListView
 from kivy.uix.popup import Popup
@@ -13,70 +13,64 @@ from kivy.utils import platform
 import cmr35_core as core
 
 
-# ============================================================
-# IZINLER
-# ============================================================
+VOLUME_STEPS = [50, 75, 100, 125, 150, 200, 250, 300, 400, 500, 700, 1000]
+
+VIDEO_FILTERS = ['*.mp4', '*.mkv', '*.mov', '*.avi', '*.webm',
+                 '*.m4v', '*.3gp', '*.ts']
+
+
+def human_size(n):
+    for u in ('B', 'KB', 'MB', 'GB'):
+        if n < 1024:
+            return '%.1f %s' % (n, u)
+        n /= 1024
+    return '%.1f TB' % n
+
+
 def request_permissions():
-    """Aciklamada Android surumune gore izin ister."""
     if platform != 'android':
         return
     try:
-        from jnius import autoclass, cast
         from android.permissions import request_permissions as rp, Permission
-
-        PythonActivity = autoclass('org.kivy.android.PythonActivity')
-        act = PythonActivity.mActivity
+        from jnius import autoclass
         Build = autoclass('android.os.Build$VERSION')
         sdk = Build.SDK_INT
-
         perms = []
         if sdk >= 33:
-            perms = [Permission.READ_MEDIA_VIDEO]
+            perms = [Permission.READ_MEDIA_VIDEO,
+                     'android.permission.POST_NOTIFICATIONS']
         elif sdk >= 23:
             perms = [Permission.READ_EXTERNAL_STORAGE]
             if sdk < 30:
                 perms.append(Permission.WRITE_EXTERNAL_STORAGE)
         if perms:
             rp(perms)
-
-        # Android 11+ icin "Tum dosyalara erisim" ayar sayfasi
         if sdk >= 30:
-            Clock.schedule_once(
-                lambda dt: _open_all_files_settings(), 1.5)
+            Clock.schedule_once(lambda dt: _open_all_files_settings(), 1.5)
     except Exception as e:
         print('izin hata:', e)
 
 
 def _open_all_files_settings():
     try:
-        from jnius import autoclass, cast
+        from jnius import autoclass
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
         Intent = autoclass('android.content.Intent')
         Settings = autoclass('android.provider.Settings')
         Uri = autoclass('android.net.Uri')
         Build = autoclass('android.os.Build$VERSION')
-
         act = PythonActivity.mActivity
         if Build.SDK_INT < 30:
             return
-
-        # Zaten izinli mi?
         Environment = autoclass('android.os.Environment')
         if Environment.isExternalStorageManager():
-            print('MANAGE_EXTERNAL_STORAGE zaten verilmis')
             return
-
         pkg = act.getPackageName()
         intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
         intent.setData(Uri.parse('package:' + pkg))
         act.startActivity(intent)
     except Exception as e:
         print('settings hata:', e)
-
-
-# ============================================================
-# YARDIMCILAR
-# ============================================================
 
 
 def keep_screen_on():
@@ -110,7 +104,7 @@ def send_notification(title, message):
                                      NotificationManager.IMPORTANCE_HIGH)
             ns.createNotificationChannel(ch)
         intent = Intent(ctx, PythonActivity)
-        flags = 0x04000000  # FLAG_IMMUTABLE
+        flags = 0x04000000
         if Build.SDK_INT < 23:
             flags = 0
         pi = PendingIntent.getActivity(ctx, 0, intent, flags)
@@ -128,16 +122,7 @@ def send_notification(title, message):
         print('notif hata:', e)
 
 
-def human_size(n):
-    for u in ('B', 'KB', 'MB', 'GB'):
-        if n < 1024:
-            return '%.1f %s' % (n, u)
-        n /= 1024
-    return '%.1f TB' % n
-
-
 def extract_ffmpeg():
-    """APK assets'ten ffmpeg/ffprobe/MOV00028 cikar."""
     if platform != 'android':
         return
     try:
@@ -170,79 +155,54 @@ def extract_ffmpeg():
 
 
 def import_shared_video():
-    """Paylasimla gelen videoyu al. Birden fazla API dener."""
     if platform != 'android':
         return None
     try:
         from jnius import autoclass
         PythonActivity = autoclass('org.kivy.android.PythonActivity')
         Intent = autoclass('android.content.Intent')
-        Build = autoclass('android.os.Build$VERSION')
         act = PythonActivity.mActivity
         intent = act.getIntent()
-        if intent is None:
-            print('SHARE: intent yok')
+        if intent is None or intent.getAction() != Intent.ACTION_SEND:
             return None
-        action = intent.getAction()
-        print('SHARE: action=', action)
-        if action != Intent.ACTION_SEND:
-            return None
-
         uri = None
-        # Android 13+ icin yeni API
         try:
             Parcelable = autoclass('android.os.Parcelable')
             uri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Parcelable)
-        except Exception as e:
-            print('SHARE: yeni API hata:', e)
-        # Eski API fallback
+        except Exception:
+            pass
         if uri is None:
             try:
                 uri = intent.getParcelableExtra(Intent.EXTRA_STREAM)
-            except Exception as e:
-                print('SHARE: eski API hata:', e)
+            except Exception:
+                pass
         if uri is None:
-            print('SHARE: uri yok')
             return None
-        print('SHARE: uri=', str(uri))
-
-        # App-ozel klasore kopyala (izin gerekmez)
         bindir = os.path.join(act.getFilesDir().getAbsolutePath(), 'shared')
         os.makedirs(bindir, exist_ok=True)
-        import time as _t
-        dst = os.path.join(bindir, 'shared_%d.mp4' % int(_t.time()))
-
-        resolver = act.getContentResolver()
-        stream = resolver.openInputStream(uri)
+        dst = os.path.join(bindir, 'shared_%d.mp4' % int(time.time()))
+        stream = act.getContentResolver().openInputStream(uri)
         if stream is None:
-            print('SHARE: stream yok')
             return None
         buf = bytearray(65536)
-        total = 0
         with open(dst, 'wb') as out:
             while True:
                 n = stream.read(buf)
                 if n <= 0:
                     break
                 out.write(bytes(buf[:n]))
-                total += n
         stream.close()
-        print('SHARE: kopyalandi', dst, total)
         return dst
     except Exception as e:
-        print('SHARE hata:', e)
+        print('shared hata:', e)
         return None
 
 
-
-# ============================================================
-# ARAYUZ
-# ============================================================
 KV = '''
 <Root>:
     orientation: 'vertical'
-    padding: dp(18)
-    spacing: dp(10)
+    padding: dp(14)
+    spacing: dp(8)
     canvas.before:
         Color:
             rgba: 0.07, 0.07, 0.09, 1
@@ -252,28 +212,24 @@ KV = '''
 
     Label:
         text: 'CMR35'
-        font_size: '32sp'
+        font_size: '28sp'
         bold: True
         color: 0.16, 0.82, 0.44, 1
         size_hint_y: None
-        height: dp(40)
+        height: dp(32)
     Label:
-        text: 'Video  →  Kamera AVI dönüştürücü'
-        font_size: '12sp'
+        text: 'Video  ->  Kamera AVI'
+        font_size: '11sp'
         color: 0.55, 0.55, 0.62, 1
         size_hint_y: None
-        height: dp(18)
-
-    Widget:
-        size_hint_y: None
-        height: dp(10)
+        height: dp(16)
 
     BoxLayout:
         orientation: 'vertical'
         size_hint_y: None
-        height: dp(130)
-        padding: dp(16), dp(12)
-        spacing: dp(6)
+        height: dp(100)
+        padding: dp(14), dp(10)
+        spacing: dp(4)
         canvas.before:
             Color:
                 rgba: 0.13, 0.13, 0.16, 1
@@ -283,20 +239,74 @@ KV = '''
                 radius: [dp(14)]
         Label:
             text: root.status
-            font_size: '16sp'
+            font_size: '15sp'
             bold: True
             color: 1, 1, 1, 1
             size_hint_y: None
-            height: dp(28)
+            height: dp(24)
             text_size: self.width, None
             halign: 'center'
         Label:
             text: root.info
-            font_size: '11sp'
+            font_size: '10sp'
             color: 0.62, 0.62, 0.68, 1
             text_size: self.width, None
             halign: 'center'
             valign: 'top'
+
+    BoxLayout:
+        orientation: 'vertical'
+        size_hint_y: None
+        height: dp(85)
+        spacing: dp(3)
+        Label:
+            text: 'Ses: ' + root.volume_label
+            font_size: '13sp'
+            bold: True
+            color: 0.9, 0.9, 0.95, 1
+            size_hint_y: None
+            height: dp(22)
+            text_size: self.width, None
+            halign: 'center'
+        Slider:
+            min: 0
+            max: 11
+            step: 1
+            value: root.vol_index
+            size_hint_y: None
+            height: dp(30)
+            on_value: root.set_vol_index(int(round(self.value)))
+        BoxLayout:
+            size_hint_y: None
+            height: dp(30)
+            spacing: dp(6)
+            Button:
+                text: '-'
+                size_hint_x: None
+                width: dp(50)
+                font_size: '20sp'
+                bold: True
+                on_release: root.vol_step(-1)
+            TextInput:
+                text: root.volume_percent_str
+                input_filter: 'int'
+                input_type: 'number'
+                multiline: False
+                font_size: '14sp'
+                halign: 'center'
+                on_text_validate: root.set_from_text(self.text)
+            Label:
+                text: '%'
+                size_hint_x: None
+                width: dp(22)
+                color: 0.75, 0.75, 0.80, 1
+            Button:
+                text: '+'
+                size_hint_x: None
+                width: dp(50)
+                font_size: '20sp'
+                bold: True
+                on_release: root.vol_step(1)
 
     ProgressBar:
         max: 1.0
@@ -304,64 +314,160 @@ KV = '''
         size_hint_y: None
         height: dp(8)
 
+    ScrollView:
+        size_hint_y: None
+        height: dp(90) if len(root.queue) > 0 else 0
+        opacity: 1 if len(root.queue) > 0 else 0
+        BoxLayout:
+            orientation: 'vertical'
+            size_hint_y: None
+            height: self.minimum_height
+            padding: dp(6)
+            canvas.before:
+                Color:
+                    rgba: 0.10, 0.10, 0.12, 1
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [dp(10)]
+            Label:
+                text: root.queue_label
+                font_size: '10sp'
+                color: 0.75, 0.75, 0.80, 1
+                size_hint_y: None
+                height: self.texture_size[1]
+                text_size: self.width, None
+                halign: 'left'
+
     Widget:
         size_hint_y: None
-        height: dp(6)
+        height: dp(2)
+
+    BoxLayout:
+        size_hint_y: None
+        height: dp(58)
+        spacing: dp(8)
+        Button:
+            text: 'Video Sec'
+            font_size: '14sp'
+            bold: True
+            color: 1, 1, 1, 1
+            background_normal: ''
+            background_disabled_normal: ''
+            background_color: 0, 0, 0, 0
+            disabled: root.busy
+            canvas.before:
+                Color:
+                    rgba: (0.16, 0.82, 0.44, 1) if not self.disabled else (0.35, 0.35, 0.38, 1)
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [dp(12)]
+            on_release: root.pick(single=True)
+        Button:
+            text: 'Toplu Sec'
+            font_size: '14sp'
+            bold: True
+            color: 1, 1, 1, 1
+            background_normal: ''
+            background_disabled_normal: ''
+            background_color: 0, 0, 0, 0
+            disabled: root.busy
+            canvas.before:
+                Color:
+                    rgba: (0.20, 0.55, 0.85, 1) if not self.disabled else (0.35, 0.35, 0.38, 1)
+                RoundedRectangle:
+                    pos: self.pos
+                    size: self.size
+                    radius: [dp(12)]
+            on_release: root.pick(single=False)
 
     Button:
-        text: '📂   Video Seç'
-        font_size: '16sp'
+        text: ('Donustur' if len(root.queue) <= 1 else 'Kuyrugu Baslat') if not root.busy else ('Iptal' if not root.canceling else 'Iptal ediliyor...')
+        font_size: '15sp'
         bold: True
         color: 1, 1, 1, 1
         size_hint_y: None
-        height: dp(62)
+        height: dp(58)
         background_normal: ''
         background_disabled_normal: ''
         background_color: 0, 0, 0, 0
-        disabled: root.busy
+        disabled: (len(root.queue) == 0 and not root.busy) or root.canceling
         canvas.before:
             Color:
-                rgba: (0.16, 0.82, 0.44, 1) if not self.disabled else (0.35, 0.35, 0.38, 1)
+                rgba: (0.85, 0.20, 0.20, 1) if root.busy else ((1, 0.45, 0, 1) if len(root.queue) > 0 else (0.35, 0.35, 0.38, 1))
             RoundedRectangle:
                 pos: self.pos
                 size: self.size
-                radius: [dp(14)]
-        on_release: root.pick()
-
-    Button:
-        text: ('▶   Dönüştür' if not root.busy else '✖   İptal') if not root.canceling else 'İptal ediliyor...'
-        font_size: '16sp'
-        bold: True
-        color: 1, 1, 1, 1
-        size_hint_y: None
-        height: dp(62)
-        background_normal: ''
-        background_disabled_normal: ''
-        background_color: 0, 0, 0, 0
-        disabled: (not root.src and not root.busy) or root.canceling
-        canvas.before:
-            Color:
-                rgba: (0.85, 0.20, 0.20, 1) if root.busy else ((1, 0.45, 0, 1) if root.src else (0.35, 0.35, 0.38, 1))
-            RoundedRectangle:
-                pos: self.pos
-                size: self.size
-                radius: [dp(14)]
-        on_release: root.cancel() if root.busy else root.start()
-
-    Widget:
+                radius: [dp(12)]
+        on_release: root.cancel() if root.busy else root.start_batch()
 '''
 
 
 class Root(BoxLayout):
-    status = StringProperty('İzin kontrol ediliyor...')
-    info = StringProperty('Lütfen bekleyin')
+    status = StringProperty('Izin kontrol ediliyor...')
+    info = StringProperty('Lutfen bekleyin')
     progress = NumericProperty(0.0)
-    src = StringProperty('')
+    vol_index = NumericProperty(7)
+    volume_label = StringProperty('300%')
+    volume_percent_str = StringProperty('300')
     busy = BooleanProperty(False)
     canceling = BooleanProperty(False)
+    queue = ListProperty([])
+    queue_label = StringProperty('')
+    src = StringProperty('')
+
+    @property
+    def volume(self):
+        idx = max(0, min(len(VOLUME_STEPS) - 1, int(round(self.vol_index))))
+        return VOLUME_STEPS[idx] / 100.0
+
+    def on_vol_index(self, *a):
+        idx = max(0, min(len(VOLUME_STEPS) - 1, int(round(self.vol_index))))
+        pct = VOLUME_STEPS[idx]
+        self.volume_label = '%d%%' % pct
+        self.volume_percent_str = str(pct)
+
+    def set_vol_index(self, idx):
+        if idx < 0:
+            idx = 0
+        if idx >= len(VOLUME_STEPS):
+            idx = len(VOLUME_STEPS) - 1
+        if int(round(self.vol_index)) != idx:
+            self.vol_index = idx
+
+    def vol_step(self, delta):
+        self.set_vol_index(int(round(self.vol_index)) + delta)
+
+    def set_from_text(self, text):
+        try:
+            pct = int(str(text).strip())
+        except (ValueError, TypeError):
+            return
+        pct = max(10, min(2000, pct))
+        best, diff = 0, abs(VOLUME_STEPS[0] - pct)
+        for i, v in enumerate(VOLUME_STEPS):
+            d = abs(v - pct)
+            if d < diff:
+                diff = d
+                best = i
+        self.set_vol_index(best)
+
+    def on_queue(self, *a):
+        if not self.queue:
+            self.queue_label = ''
+            return
+        lines = []
+        for i, p in enumerate(self.queue[:6], 1):
+            n = os.path.basename(p)
+            if len(n) > 38:
+                n = n[:35] + '...'
+            lines.append('%d. %s' % (i, n))
+        if len(self.queue) > 6:
+            lines.append('... +%d daha' % (len(self.queue) - 6))
+        self.queue_label = '\n'.join(lines)
 
     def on_kv_post(self, base_widget):
-        # Arayuz hazir olunca izinleri iste
         Clock.schedule_once(lambda dt: self._ask_permissions(), 0.4)
 
     def _ask_permissions(self):
@@ -373,16 +479,15 @@ class Root(BoxLayout):
             self._after_perms()
 
     def _after_perms(self):
-        self.status = 'Hazır'
-        self.info = 'Dönüştürmek için video seçin'
-        # Paylasimla gelen video var mi?
+        self.status = 'Hazir'
+        self.info = 'Donusturmek icin video secin'
         try:
             path = import_shared_video()
             if path and os.path.isfile(path):
-                self.src = path
+                self.queue = [path]
                 size = human_size(os.path.getsize(path))
-                self.status = 'Paylaşılan video hazır'
-                self.info = '%s\n%s' % (os.path.basename(path), size)
+                self.status = 'Paylasilan video hazir'
+                self.info = '%s  -  %s' % (os.path.basename(path), size)
         except Exception as e:
             print('on_start hata:', e)
 
@@ -429,52 +534,31 @@ class Root(BoxLayout):
                 return p
         return None
 
-    def on_resume(self):
-        # Uygulama one geldiginde paylasim geldi mi kontrol et
-        try:
-            from jnius import autoclass
-            PythonActivity = autoclass('org.kivy.android.PythonActivity')
-            Intent = autoclass('android.content.Intent')
-            act = PythonActivity.mActivity
-            intent = act.getIntent()
-            if intent and intent.getAction() == Intent.ACTION_SEND:
-                p = import_shared_video()
-                if p and os.path.isfile(p):
-                    self.src = p
-                    size = human_size(os.path.getsize(p))
-                    self.status = 'Paylasilan video hazir'
-                    self.info = '%s\n%s' % (os.path.basename(p), size)
-                    # Intent'i temizle ki tekrar tetiklenmesin
-                    try:
-                        intent.setAction('')
-                        act.setIntent(intent)
-                    except Exception:
-                        pass
-        except Exception as e:
-            print('on_resume hata:', e)
-
-    def pick(self):
+    def pick(self, single=True):
         box = BoxLayout(orientation='vertical')
         fc = FileChooserListView(
             path=self._best_dir(),
-            filters=['*.mp4', '*.mkv', '*.mov', '*.avi', '*.webm',
-                     '*.m4v', '*.3gp', '*.ts'])
+            filters=VIDEO_FILTERS,
+            multiselect=not single)
         box.add_widget(fc)
-        pop = Popup(title='Video Seç', content=box,
-                    size_hint=(0.95, 0.95))
+        title = 'Video Sec' if single else 'Toplu Sec (birden fazla)'
+        pop = Popup(title=title, content=box, size_hint=(0.95, 0.95))
 
         def _go(*a):
-            if fc.selection:
-                self.src = fc.selection[0]
-                try:
-                    size = human_size(os.path.getsize(self.src))
-                except OSError:
-                    size = '?'
-                self.status = 'Video hazır'
-                self.info = '%s\n%s' % (os.path.basename(self.src), size)
+            sel = list(fc.selection) if fc.selection else []
+            if sel:
+                if single:
+                    self.queue = [sel[0]]
+                    size = human_size(os.path.getsize(sel[0]))
+                    self.status = 'Video hazir'
+                    self.info = '%s  -  %s' % (os.path.basename(sel[0]), size)
+                else:
+                    self.queue = sel
+                    self.status = 'Kuyruk hazir (%d video)' % len(sel)
+                    self.info = 'Kuyrugu Baslat butonuna basin'
             pop.dismiss()
 
-        btn = Button(text='Seç', size_hint_y=None, height='48dp')
+        btn = Button(text='Sec', size_hint_y=None, height='48dp')
         btn.bind(on_release=_go)
         box.add_widget(btn)
         pop.open()
@@ -483,16 +567,16 @@ class Root(BoxLayout):
         if not self.busy or self.canceling:
             return
         self.canceling = True
-        self.status = 'İptal ediliyor...'
+        self.status = 'Iptal ediliyor...'
         core.request_cancel()
 
-    def start(self):
-        if not self.src or self.busy:
+    def start_batch(self):
+        if not self.queue or self.busy:
             return
         self.busy = True
-        self.status = 'Başlıyor...'
+        self.status = 'Basliyor...'
         self.progress = 0.0
-        threading.Thread(target=self._work, daemon=True).start()
+        threading.Thread(target=self._batch_worker, daemon=True).start()
 
     def _share(self, path):
         if platform != 'android':
@@ -509,73 +593,94 @@ class Root(BoxLayout):
             i.putExtra(Intent.EXTRA_STREAM,
                        cast('android.os.Parcelable', u))
             PythonActivity.mActivity.startActivity(
-                Intent.createChooser(i, 'Paylaş'))
+                Intent.createChooser(i, 'Paylas'))
         except Exception:
             pass
 
-    def _work(self):
-        try:
-            core.clear_cancel()
-            keep_screen_on()
-            extract_ffmpeg()
-            ff, fp, libdir = core.find_ffmpeg()
-            if not ff or not fp:
-                self._set_status('❌  ffmpeg bulunamadı')
-                self._set_info('Uygulamayı yeniden kurun')
-                return
+    def _process_one(self, src, idx, total):
+        extract_ffmpeg()
+        ff, fp, libdir = core.find_ffmpeg()
+        if not ff or not fp:
+            raise RuntimeError('ffmpeg bulunamadi')
+        env = core._env_with_libs(libdir)
+        tmpl = self._template_path()
+        if not tmpl:
+            raise RuntimeError('Sablon MOV00028.AVI yok')
+        appdir = self._app_dir()
+        norm = os.path.join(appdir, 'norm.avi')
+        outtmp = os.path.join(appdir, 'out.avi')
+        dur = core.probe_duration(fp, src, env)
+        prefix = '[%d/%d] ' % (idx, total) if total > 1 else ''
+        self._set_status('%sEncode: %ddk %dsn' % (
+            prefix, int(dur // 60), int(dur % 60)))
+        self._set_info(os.path.basename(src))
 
-            env = core._env_with_libs(libdir)
-            tmpl = self._template_path()
-            if not tmpl:
-                self._set_status('❌  Şablon bulunamadı')
-                self._set_info('MOV00028.AVI /sdcard/Download\'a kopyalayın')
-                return
-
-            appdir = self._app_dir()
-            norm = os.path.join(appdir, 'norm.avi')
-            outtmp = os.path.join(appdir, 'out.avi')
-
-            dur = core.probe_duration(fp, self.src, env)
-            mins = int(dur // 60)
-            secs = int(dur % 60)
-            self._set_status('Video: %ddk %dsn' % (mins, secs))
-            self._set_info('Encode ediliyor...')
-
-            def prog(sec, total):
-                if total > 0:
+        def prog(sec, total_sec):
+            if total_sec > 0:
+                frac = min(0.98, sec / total_sec)
+                if total > 1:
+                    overall = ((idx - 1) + frac) / total
                     Clock.schedule_once(lambda *_: setattr(
-                        self, 'progress', min(0.98, sec / total)))
+                        self, 'progress', overall))
+                else:
+                    Clock.schedule_once(lambda *_: setattr(
+                        self, 'progress', frac))
 
-            core.normalize_input(ff, fp, self.src, norm, dur,
-                                 env=env, on_progress=prog)
-            self._set_status('AVI inşa ediliyor...')
-            Clock.schedule_once(lambda *_: setattr(self, 'progress', 0.99))
-            core.build_output(tmpl, norm, outtmp)
+        core.normalize_input(ff, fp, src, norm, dur,
+                             volume=self.volume, env=env, on_progress=prog)
+        self._set_status('%sAVI insa ediliyor...' % prefix)
+        core.build_output(tmpl, norm, outtmp)
+        out = src.rsplit('.', 1)[0] + '_CMR35.AVI'
+        try:
+            shutil.move(outtmp, out)
+        except Exception:
+            out = outtmp
+        try:
+            os.remove(norm)
+        except OSError:
+            pass
+        return out
 
-            out = self.src.rsplit('.', 1)[0] + '_CMR35.AVI'
-            try:
-                shutil.move(outtmp, out)
-            except Exception:
-                out = outtmp
-            try:
-                os.remove(norm)
-            except OSError:
-                pass
+    def _batch_worker(self):
+        core.clear_cancel()
+        keep_screen_on()
+        total = len(self.queue)
+        done, failed = [], []
+        try:
+            for i, src in enumerate(self.queue, 1):
+                if core.is_cancelled():
+                    break
+                try:
+                    out = self._process_one(src, i, total)
+                    done.append(out)
+                except Exception as e:
+                    msg = str(e)
+                    if 'Iptal' in msg or core.is_cancelled():
+                        break
+                    print('HATA (%s): %s' % (src, msg))
+                    failed.append((src, msg[:80]))
 
-            mb = os.path.getsize(out) / (1024 * 1024)
-            Clock.schedule_once(lambda *_: setattr(self, 'progress', 1.0))
-            self._set_status('✓  Tamamlandı')
-            self._set_info('%s\n%.1f MB' % (os.path.basename(out), mb))
-            send_notification('CMR35 - Tamamlandı', '%s (%.1f MB)' % (os.path.basename(out), mb))
-            self._share(out)
-        except Exception as e:
-            msg = str(e)
-            if 'Iptal edildi' in msg:
-                self._set_status('✖  İptal edildi')
-                self._set_info('Dönüşüm kullanıcı tarafından durduruldu')
+            if core.is_cancelled():
+                self._set_status('Iptal edildi')
+                self._set_info('%d/%d tamamlandi' % (len(done), total))
+            elif failed:
+                self._set_status('Kismi tamam (%d/%d)' % (len(done), total))
+                self._set_info('Hatalar: ' + '; '.join(
+                    os.path.basename(s) for s, _ in failed[:3]))
             else:
-                self._set_status('❌  Hata')
-                self._set_info(msg[:150])
+                Clock.schedule_once(
+                    lambda *_: setattr(self, 'progress', 1.0))
+                self._set_status('Tamamlandi: %d video' % len(done))
+                if done:
+                    self._set_info(os.path.basename(done[-1]))
+                    send_notification(
+                        'CMR35 - Tamamlandi',
+                        '%d video donusturuldu' % len(done))
+                    if len(done) == 1:
+                        self._share(done[0])
+        except Exception as e:
+            self._set_status('Hata')
+            self._set_info(str(e)[:150])
         finally:
             self._set_busy(False)
             self._set_canceling(False)
