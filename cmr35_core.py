@@ -88,7 +88,7 @@ def run_ffmpeg(ffmpeg, args, total_sec, env=None, on_progress=None):
         tail = '\n'.join(errbuf[-25:])
         raise RuntimeError('ffmpeg hata %d:\n%s' % (proc.returncode, tail))
 
-def normalize_input(ffmpeg, ffprobe, src, out, total_sec, env=None, on_progress=None):
+def normalize_input(ffmpeg, ffprobe, src, out, total_sec, volume=3.0, env=None, on_progress=None):
     _, has_audio = probe_streams(ffprobe, src, env)
     vol = os.environ.get('CMR35_VOL', '3.0')
     q = os.environ.get('CMR35_Q', '25')
@@ -328,3 +328,22 @@ def get_video_dimensions(ffprobe, src, env=None):
         return int(o[0]), int(o[1])
     except Exception:
         return 0, 0
+
+
+# ============================================================
+# IPTAL FONKSIYONLARI (main.py icin gerekli)
+# ============================================================
+import threading as _threading
+_cancel_event = _threading.Event()
+
+
+def request_cancel():
+    _cancel_event.set()
+
+
+def clear_cancel():
+    _cancel_event.clear()
+
+
+def is_cancelled():
+    return _cancel_event.is_set()
