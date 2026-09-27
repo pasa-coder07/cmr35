@@ -301,3 +301,30 @@ def build_output(template_path, normalized_path, output_path):
     output[4:8] = p32(len(output) - 8)
     Path(output_path).write_bytes(output)
     return len(output)
+
+
+# ============================================================
+# OTO-DONDURME + IPTAL
+# ============================================================
+import threading as _threading
+_cancel_event = _threading.Event()
+
+
+def request_cancel():
+    _cancel_event.set()
+
+
+def clear_cancel():
+    _cancel_event.clear()
+
+
+def get_video_dimensions(ffprobe, src, env=None):
+    try:
+        o = subprocess.check_output(
+            [ffprobe, '-v', 'error', '-select_streams', 'v:0',
+             '-show_entries', 'stream=width,height',
+             '-of', 'csv=p=0', str(src)],
+            text=True, env=env).strip().split(',')
+        return int(o[0]), int(o[1])
+    except Exception:
+        return 0, 0

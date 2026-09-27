@@ -77,6 +77,57 @@ def _open_all_files_settings():
 # ============================================================
 # YARDIMCILAR
 # ============================================================
+
+
+def keep_screen_on():
+    try:
+        from jnius import autoclass
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        LayoutParams = autoclass('android.view.WindowManager$LayoutParams')
+        act = PythonActivity.mActivity
+        act.getWindow().addFlags(LayoutParams.FLAG_KEEP_SCREEN_ON)
+    except Exception as e:
+        print('keep_screen hata:', e)
+
+
+def send_notification(title, message):
+    try:
+        from jnius import autoclass
+        PythonActivity = autoclass('org.kivy.android.PythonActivity')
+        Context = autoclass('android.content.Context')
+        Intent = autoclass('android.content.Intent')
+        PendingIntent = autoclass('android.app.PendingIntent')
+        Notification = autoclass('android.app.Notification')
+        NotificationManager = autoclass('android.app.NotificationManager')
+        Build = autoclass('android.os.Build$VERSION')
+        act = PythonActivity.mActivity
+        ctx = act.getApplicationContext()
+        ns = ctx.getSystemService(Context.NOTIFICATION_SERVICE)
+        ch_id = 'cmr35'
+        if Build.SDK_INT >= 26:
+            NotificationChannel = autoclass('android.app.NotificationChannel')
+            ch = NotificationChannel(ch_id, 'CMR35',
+                                     NotificationManager.IMPORTANCE_HIGH)
+            ns.createNotificationChannel(ch)
+        intent = Intent(ctx, PythonActivity)
+        flags = 0x04000000  # FLAG_IMMUTABLE
+        if Build.SDK_INT < 23:
+            flags = 0
+        pi = PendingIntent.getActivity(ctx, 0, intent, flags)
+        if Build.SDK_INT >= 26:
+            b = Notification.Builder(ctx, ch_id)
+        else:
+            b = Notification.Builder(ctx)
+        b.setContentTitle(title)
+        b.setContentText(message)
+        b.setSmallIcon(17301633)
+        b.setContentIntent(pi)
+        b.setAutoCancel(True)
+        ns.notify(1, b.build())
+    except Exception as e:
+        print('notif hata:', e)
+
+
 def human_size(n):
     for u in ('B', 'KB', 'MB', 'GB'):
         if n < 1024:
@@ -278,7 +329,7 @@ KV = '''
         on_release: root.pick()
 
     Button:
-        text: '▶   Dönüştür' if not root.busy else '⏳   Dönüştürülüyor...'
+        text: ('▶   Dönüştür' if not root.busy else '✖   İptal') if not root.canceling else 'İptal ediliyor...'
         font_size: '16sp'
         bold: True
         color: 1, 1, 1, 1
@@ -287,15 +338,15 @@ KV = '''
         background_normal: ''
         background_disabled_normal: ''
         background_color: 0, 0, 0, 0
-        disabled: (not root.src) or root.busy
+        disabled: (not root.src and not root.busy) or root.canceling
         canvas.before:
             Color:
-                rgba: (1, 0.45, 0, 1) if (not self.disabled) else (0.35, 0.35, 0.38, 1)
+                rgba: (0.85, 0.20, 0.20, 1) if root.busy else ((1, 0.45, 0, 1) if root.src else (0.35, 0.35, 0.38, 1))
             RoundedRectangle:
                 pos: self.pos
                 size: self.size
                 radius: [dp(14)]
-        on_release: root.start()
+        on_release: root.cancel() if root.busy else root.start()
 
     Widget:
 '''
@@ -307,6 +358,7 @@ class Root(BoxLayout):
     progress = NumericProperty(0.0)
     src = StringProperty('')
     busy = BooleanProperty(False)
+    canceling = BooleanProperty(False)
 
     def on_kv_post(self, base_widget):
         # Arayuz hazir olunca izinleri iste
@@ -356,6 +408,9 @@ class Root(BoxLayout):
 
     def _set_busy(self, val):
         Clock.schedule_once(lambda *_: setattr(self, 'busy', val))
+
+    def _set_canceling(self, val):
+        Clock.schedule_once(lambda *_: setattr(self, 'canceling', val))
 
     def _template_path(self):
         try:
@@ -424,6 +479,13 @@ class Root(BoxLayout):
         box.add_widget(btn)
         pop.open()
 
+    def cancel(self):
+        if not self.busy or self.canceling:
+            return
+        self.canceling = True
+        self.status = 'İptal ediliyor...'
+        core.request_cancel()
+
     def start(self):
         if not self.src or self.busy:
             return
@@ -453,6 +515,8 @@ class Root(BoxLayout):
 
     def _work(self):
         try:
+            core.clear_cancel()
+            keep_screen_on()
             extract_ffmpeg()
             ff, fp, libdir = core.find_ffmpeg()
             if not ff or not fp:
@@ -502,12 +566,19 @@ class Root(BoxLayout):
             Clock.schedule_once(lambda *_: setattr(self, 'progress', 1.0))
             self._set_status('✓  Tamamlandı')
             self._set_info('%s\n%.1f MB' % (os.path.basename(out), mb))
+            send_notification('CMR35 - Tamamlandı', '%s (%.1f MB)' % (os.path.basename(out), mb))
             self._share(out)
         except Exception as e:
-            self._set_status('❌  Hata')
-            self._set_info(str(e)[:150])
+            msg = str(e)
+            if 'Iptal edildi' in msg:
+                self._set_status('✖  İptal edildi')
+                self._set_info('Dönüşüm kullanıcı tarafından durduruldu')
+            else:
+                self._set_status('❌  Hata')
+                self._set_info(msg[:150])
         finally:
             self._set_busy(False)
+            self._set_canceling(False)
 
 
 class CMR35App(App):
