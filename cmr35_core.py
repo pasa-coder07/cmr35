@@ -186,8 +186,8 @@ def normalize_input(ffmpeg, ffprobe, src, out, total_sec,
         rotate = 'transpose=2,'
 
     vf = (rotate +
-          'scale=%d:%d:force_original_aspect_ratio=decrease,'
-          'pad=%d:%d:(ow-iw)/2:(oh-ih)/2'
+          'scale=%d:%d:force_original_aspect_ratio=increase,'
+          'crop=%d:%d'
           % (TARGET_W, TARGET_H, TARGET_W, TARGET_H))
 
     dsp = ('highpass=f=120,lowpass=f=7500,'
