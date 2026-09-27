@@ -17,7 +17,8 @@ import cmr35_core as core
 VOLUME_STEPS = [50, 75, 100, 125, 150, 200, 250, 300,
                 400, 500, 700, 1000]
 DEFAULT_VOL_IDX = 7
-SEGMENT_SEC = 180  # 3 dakika parca boyu
+SEGMENT_SEC = 180
+OUTPUT_DIR = '/sdcard/Download/CMR35'  # 3 dakika parca boyu
 
 VIDEO_FILTERS = ['*.mp4', '*.mkv', '*.mov', '*.avi', '*.webm',
                  '*.m4v', '*.3gp', '*.ts']
@@ -646,11 +647,16 @@ class Root(BoxLayout):
         self._set_status('%sAVI insa ediliyor...' % prefix)
         core.build_output(tmpl, norm, outtmp)
 
+        try:
+            os.makedirs(OUTPUT_DIR, exist_ok=True)
+        except OSError:
+            pass
+        base = os.path.basename(base_name).rsplit('.', 1)[0]
         if part_n > 1:
-            base = base_name.rsplit('.', 1)[0]
-            out = '%s_part%d_CMR35.AVI' % (base, part_i)
+            out = os.path.join(
+                OUTPUT_DIR, '%s_part%d_CMR35.AVI' % (base, part_i))
         else:
-            out = base_name.rsplit('.', 1)[0] + '_CMR35.AVI'
+            out = os.path.join(OUTPUT_DIR, base + '_CMR35.AVI')
 
         try:
             shutil.move(outtmp, out)
@@ -738,7 +744,7 @@ class Root(BoxLayout):
                 self._set_progress(1.0)
                 self._set_status('Tamamlandi: %d video' % len(done))
                 if done:
-                    self._set_info(os.path.basename(done[-1]))
+                    self._set_info('Kayit yeri:\n' + os.path.dirname(done[-1]))
                     send_notification(
                         'CMR35 - Tamamlandi',
                         '%d video donusturuldu' % len(done))
