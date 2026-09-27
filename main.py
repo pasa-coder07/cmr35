@@ -17,6 +17,7 @@ import cmr35_core as core
 VOLUME_STEPS = [50, 75, 100, 125, 150, 200, 250, 300,
                 400, 500, 700, 1000]
 DEFAULT_VOL_IDX = 7
+SEGMENT_SEC = 180  # 3 dakika parca boyu
 
 VIDEO_FILTERS = ['*.mp4', '*.mkv', '*.mov', '*.avi', '*.webm',
                  '*.m4v', '*.3gp', '*.ts']
@@ -616,6 +617,51 @@ class Root(BoxLayout):
         except Exception:
             pass
 
+    def _cut_segment(self, ff, src, start, dur, out, env):
+        args = ['-ss', str(start), '-i', str(src), '-t', str(dur),
+                '-c', 'copy', '-avoid_negative_ts', 'make_zero',
+                '-y', str(out)]
+        core.run_ffmpeg(ff, args, 0, env=env)
+
+    def _encode_segment(self, src, tmpl, ff, fp, env, appdir,
+                        dur, prefix, part_i, part_n, base_name):
+        norm = os.path.join(appdir, 'norm_%d.avi' % part_i)
+        outtmp = os.path.join(appdir, 'out_%d.avi' % part_i)
+
+        self._set_status('%sEncode: %ddk %dsn' % (
+            prefix, int(dur // 60), int(dur % 60)))
+        self._set_info(os.path.basename(base_name))
+
+        def prog(sec, total_sec):
+            if total_sec > 0:
+                frac = min(0.98, sec / total_sec)
+                if part_n > 1:
+                    self._set_progress(((part_i - 1) + frac) / part_n)
+                else:
+                    self._set_progress(frac)
+
+        core.normalize_input(ff, fp, src, norm, dur,
+                             volume=self.volume, env=env,
+                             on_progress=prog)
+        self._set_status('%sAVI insa ediliyor...' % prefix)
+        core.build_output(tmpl, norm, outtmp)
+
+        if part_n > 1:
+            base = base_name.rsplit('.', 1)[0]
+            out = '%s_part%d_CMR35.AVI' % (base, part_i)
+        else:
+            out = base_name.rsplit('.', 1)[0] + '_CMR35.AVI'
+
+        try:
+            shutil.move(outtmp, out)
+        except Exception:
+            out = outtmp
+        try:
+            os.remove(norm)
+        except OSError:
+            pass
+        return out
+
     def _process_one(self, src, idx, total):
         extract_ffmpeg()
         ff, fp, libdir = core.find_ffmpeg()
@@ -627,40 +673,39 @@ class Root(BoxLayout):
             raise RuntimeError('Sablon MOV00028.AVI yok')
 
         appdir = self._app_dir()
-        norm = os.path.join(appdir, 'norm.avi')
-        outtmp = os.path.join(appdir, 'out.avi')
-
         dur = core.probe_duration(fp, src, env)
         prefix = '[%d/%d] ' % (idx, total) if total > 1 else ''
-        self._set_status('%sEncode: %ddk %dsn' % (
-            prefix, int(dur // 60), int(dur % 60)))
-        self._set_info(os.path.basename(src))
 
-        def prog(sec, total_sec):
-            if total_sec > 0:
-                frac = min(0.98, sec / total_sec)
-                if total > 1:
-                    overall = ((idx - 1) + frac) / total
-                    self._set_progress(overall)
-                else:
-                    self._set_progress(frac)
+        if dur <= SEGMENT_SEC + 5:
+            return [self._encode_segment(
+                src, tmpl, ff, fp, env, appdir,
+                dur, prefix, 1, 1, base_name=src)]
 
-        core.normalize_input(ff, fp, src, norm, dur,
-                             volume=self.volume, env=env,
-                             on_progress=prog)
-        self._set_status('%sAVI insa ediliyor...' % prefix)
-        core.build_output(tmpl, norm, outtmp)
+        n_parts = int(dur // SEGMENT_SEC)
+        if dur - n_parts * SEGMENT_SEC > 2:
+            n_parts += 1
 
-        out = src.rsplit('.', 1)[0] + '_CMR35.AVI'
-        try:
-            shutil.move(outtmp, out)
-        except Exception:
-            out = outtmp
-        try:
-            os.remove(norm)
-        except OSError:
-            pass
-        return out
+        outputs = []
+        for i in range(n_parts):
+            start = i * SEGMENT_SEC
+            remain = min(SEGMENT_SEC, dur - start)
+            if remain < 2:
+                break
+            pfx = '%sParc %d/%d: ' % (prefix, i + 1, n_parts)
+            part = os.path.join(appdir, '_part_%d.mp4' % i)
+            self._set_status('%sKesiliyor...' % pfx)
+            self._cut_segment(ff, src, start, remain, part, env)
+            try:
+                out = self._encode_segment(
+                    part, tmpl, ff, fp, env, appdir,
+                    remain, pfx, i + 1, n_parts, base_name=src)
+                outputs.append(out)
+            finally:
+                try:
+                    os.remove(part)
+                except OSError:
+                    pass
+        return outputs
 
     def _batch_worker(self):
         core.clear_cancel()
@@ -672,8 +717,9 @@ class Root(BoxLayout):
                 if core.is_cancelled():
                     break
                 try:
-                    out = self._process_one(src, i, total)
-                    done.append(out)
+                    outs = self._process_one(src, i, total)
+                    if outs:
+                        done.extend(outs)
                 except Exception as e:
                     msg = str(e)
                     if 'Iptal' in msg or core.is_cancelled():
