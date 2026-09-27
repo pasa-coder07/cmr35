@@ -3,7 +3,8 @@ import os, threading, shutil, time
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
-from kivy.properties import StringProperty, NumericProperty, BooleanProperty, ListProperty
+from kivy.properties import (StringProperty, NumericProperty,
+                             BooleanProperty, ListProperty)
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.filechooser import FileChooserListView
 from kivy.uix.popup import Popup
@@ -13,7 +14,9 @@ from kivy.utils import platform
 import cmr35_core as core
 
 
-VOLUME_STEPS = [50, 75, 100, 125, 150, 200, 250, 300, 400, 500, 700, 1000]
+VOLUME_STEPS = [50, 75, 100, 125, 150, 200, 250, 300,
+                400, 500, 700, 1000]
+DEFAULT_VOL_IDX = 7
 
 VIDEO_FILTERS = ['*.mp4', '*.mkv', '*.mov', '*.avi', '*.webm',
                  '*.m4v', '*.3gp', '*.ts']
@@ -66,7 +69,8 @@ def _open_all_files_settings():
         if Environment.isExternalStorageManager():
             return
         pkg = act.getPackageName()
-        intent = Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+        intent = Intent(
+            Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
         intent.setData(Uri.parse('package:' + pkg))
         act.startActivity(intent)
     except Exception as e:
@@ -99,7 +103,8 @@ def send_notification(title, message):
         ns = ctx.getSystemService(Context.NOTIFICATION_SERVICE)
         ch_id = 'cmr35'
         if Build.SDK_INT >= 26:
-            NotificationChannel = autoclass('android.app.NotificationChannel')
+            NotificationChannel = autoclass(
+                'android.app.NotificationChannel')
             ch = NotificationChannel(ch_id, 'CMR35',
                                      NotificationManager.IMPORTANCE_HIGH)
             ns.createNotificationChannel(ch)
@@ -178,7 +183,8 @@ def import_shared_video():
                 pass
         if uri is None:
             return None
-        bindir = os.path.join(act.getFilesDir().getAbsolutePath(), 'shared')
+        bindir = os.path.join(
+            act.getFilesDir().getAbsolutePath(), 'shared')
         os.makedirs(bindir, exist_ok=True)
         dst = os.path.join(bindir, 'shared_%d.mp4' % int(time.time()))
         stream = act.getContentResolver().openInputStream(uri)
@@ -275,7 +281,7 @@ KV = '''
             value: root.vol_index
             size_hint_y: None
             height: dp(30)
-            on_value: root.set_vol_index(int(round(self.value)))
+            on_value: root._on_slider(self.value)
         BoxLayout:
             size_hint_y: None
             height: dp(30)
@@ -408,7 +414,7 @@ class Root(BoxLayout):
     status = StringProperty('Izin kontrol ediliyor...')
     info = StringProperty('Lutfen bekleyin')
     progress = NumericProperty(0.0)
-    vol_index = NumericProperty(7)
+    vol_index = NumericProperty(DEFAULT_VOL_IDX)
     volume_label = StringProperty('300%')
     volume_percent_str = StringProperty('300')
     busy = BooleanProperty(False)
@@ -422,6 +428,11 @@ class Root(BoxLayout):
         idx = max(0, min(len(VOLUME_STEPS) - 1, int(round(self.vol_index))))
         return VOLUME_STEPS[idx] / 100.0
 
+    def _on_slider(self, value):
+        idx = int(round(value))
+        if idx != int(round(self.vol_index)):
+            self.vol_index = idx
+
     def on_vol_index(self, *a):
         idx = max(0, min(len(VOLUME_STEPS) - 1, int(round(self.vol_index))))
         pct = VOLUME_STEPS[idx]
@@ -433,8 +444,7 @@ class Root(BoxLayout):
             idx = 0
         if idx >= len(VOLUME_STEPS):
             idx = len(VOLUME_STEPS) - 1
-        if int(round(self.vol_index)) != idx:
-            self.vol_index = idx
+        self.vol_index = idx
 
     def vol_step(self, delta):
         self.set_vol_index(int(round(self.vol_index)) + delta)
@@ -468,6 +478,7 @@ class Root(BoxLayout):
         self.queue_label = '\n'.join(lines)
 
     def on_kv_post(self, base_widget):
+        self.on_vol_index()
         Clock.schedule_once(lambda dt: self._ask_permissions(), 0.4)
 
     def _ask_permissions(self):
@@ -517,11 +528,15 @@ class Root(BoxLayout):
     def _set_canceling(self, val):
         Clock.schedule_once(lambda *_: setattr(self, 'canceling', val))
 
+    def _set_progress(self, val):
+        Clock.schedule_once(lambda *_: setattr(self, 'progress', val))
+
     def _template_path(self):
         try:
             from jnius import autoclass
             act = autoclass('org.kivy.android.PythonActivity').mActivity
-            bindir = os.path.join(act.getFilesDir().getAbsolutePath(), 'bin')
+            bindir = os.path.join(
+                act.getFilesDir().getAbsolutePath(), 'bin')
             p = os.path.join(bindir, 'MOV00028.AVI')
             if os.path.isfile(p):
                 return p
@@ -549,9 +564,13 @@ class Root(BoxLayout):
             if sel:
                 if single:
                     self.queue = [sel[0]]
-                    size = human_size(os.path.getsize(sel[0]))
+                    try:
+                        size = human_size(os.path.getsize(sel[0]))
+                    except OSError:
+                        size = '?'
                     self.status = 'Video hazir'
-                    self.info = '%s  -  %s' % (os.path.basename(sel[0]), size)
+                    self.info = '%s  -  %s' % (
+                        os.path.basename(sel[0]), size)
                 else:
                     self.queue = sel
                     self.status = 'Kuyruk hazir (%d video)' % len(sel)
@@ -606,9 +625,11 @@ class Root(BoxLayout):
         tmpl = self._template_path()
         if not tmpl:
             raise RuntimeError('Sablon MOV00028.AVI yok')
+
         appdir = self._app_dir()
         norm = os.path.join(appdir, 'norm.avi')
         outtmp = os.path.join(appdir, 'out.avi')
+
         dur = core.probe_duration(fp, src, env)
         prefix = '[%d/%d] ' % (idx, total) if total > 1 else ''
         self._set_status('%sEncode: %ddk %dsn' % (
@@ -620,16 +641,16 @@ class Root(BoxLayout):
                 frac = min(0.98, sec / total_sec)
                 if total > 1:
                     overall = ((idx - 1) + frac) / total
-                    Clock.schedule_once(lambda *_: setattr(
-                        self, 'progress', overall))
+                    self._set_progress(overall)
                 else:
-                    Clock.schedule_once(lambda *_: setattr(
-                        self, 'progress', frac))
+                    self._set_progress(frac)
 
         core.normalize_input(ff, fp, src, norm, dur,
-                             volume=self.volume, env=env, on_progress=prog)
+                             volume=self.volume, env=env,
+                             on_progress=prog)
         self._set_status('%sAVI insa ediliyor...' % prefix)
         core.build_output(tmpl, norm, outtmp)
+
         out = src.rsplit('.', 1)[0] + '_CMR35.AVI'
         try:
             shutil.move(outtmp, out)
@@ -668,8 +689,7 @@ class Root(BoxLayout):
                 self._set_info('Hatalar: ' + '; '.join(
                     os.path.basename(s) for s, _ in failed[:3]))
             else:
-                Clock.schedule_once(
-                    lambda *_: setattr(self, 'progress', 1.0))
+                self._set_progress(1.0)
                 self._set_status('Tamamlandi: %d video' % len(done))
                 if done:
                     self._set_info(os.path.basename(done[-1]))
