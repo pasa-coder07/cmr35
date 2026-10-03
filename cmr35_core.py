@@ -193,10 +193,15 @@ def normalize_input(ffmpeg, ffprobe, src, out, total_sec,
     dsp = ('highpass=f=120,lowpass=f=7500,'
            'volume=%.2f,alimiter=limit=0.95' % float(volume))
 
-    vargs = ['-vf', vf, '-r', str(TARGET_FPS), '-c:v', 'mjpeg',
+    vargs = ['-vf', vf, '-r', str(TARGET_FPS),
+             '-vsync', 'cfr', '-fps_mode', 'cfr',
+             '-avoid_negative_ts', 'make_zero',
+             '-fflags', '+genpts',
+             '-c:v', 'mjpeg',
              '-q:v', str(q), '-pix_fmt', 'yuvj420p',
              '-huffman', 'default', '-threads', '0']
-    aargs = ['-c:a', 'pcm_s16le', '-ar', str(AUDIO_RATE), '-ac', '1']
+    aargs = ['-c:a', 'pcm_s16le', '-ar', str(AUDIO_RATE), '-ac', '1',
+             '-async', '1']
 
     if not has_audio:
         args = ['-i', str(src), '-f', 'lavfi', '-i',
